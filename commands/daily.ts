@@ -1,12 +1,7 @@
-import process from "node:process";
 import Table from "cli-table3";
 import { define } from "gunshi";
 import pc from "picocolors";
-import {
-	calculateTotals,
-	createTotalsObject,
-	getTotalTokens,
-} from "../calculate-cost.ts";
+import { calculateTotals, createTotalsObject, getTotalTokens } from "../calculate-cost.ts";
 import { type LoadOptions, loadUsageData } from "../data-loader.ts";
 import { log, logger } from "../logger.ts";
 import { sharedArgs } from "../shared-args.ts";
@@ -30,7 +25,7 @@ export const dailyCommand = define({
 			} else {
 				logger.warn("No Claude usage data found.");
 			}
-			process.exit(0);
+			Deno.exit(0);
 		}
 
 		// Calculate totals
@@ -53,7 +48,7 @@ export const dailyCommand = define({
 			log(JSON.stringify(jsonOutput, null, 2));
 		} else {
 			// Print header
-			logger.box("Claude Code Token Usage Report - Daily");
+			log("\n" + pc.cyan("Claude Code Token Usage Report - Daily") + "\n");
 
 			// Create table
 			const table = new Table({

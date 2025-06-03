@@ -1,5 +1,5 @@
-import type { DailyUsage, SessionUsage } from "./data-loader";
-import type { TokenData, TokenTotals } from "./types";
+import type { DailyUsage, SessionUsage } from "./data-loader.ts";
+import type { TokenData, TokenTotals } from "./types.ts";
 
 export function calculateTotals(
 	data: Array<DailyUsage | SessionUsage>,

@@ -1,50 +1,92 @@
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import path from "node:path";
+import { join, relative } from "@std/path";
+import { SEPARATOR as sep } from "@std/path/constants.ts";
 import { sort } from "fast-sort";
-import { glob } from "tinyglobby";
-import * as v from "valibot";
 
-export const getDefaultClaudePath = () => path.join(homedir(), ".claude");
+const readFile = async (filePath: string): Promise<string> => {
+	return await Deno.readTextFile(filePath);
+};
 
-export const UsageDataSchema = v.object({
-	timestamp: v.string(),
-	message: v.object({
-		usage: v.object({
-			input_tokens: v.number(),
-			output_tokens: v.number(),
-			cache_creation_input_tokens: v.optional(v.number()),
-			cache_read_input_tokens: v.optional(v.number()),
-		}),
-	}),
-	costUSD: v.number(),
-});
+const homedir = () => Deno.env.get("HOME") || Deno.env.get("USERPROFILE") || "";
 
-export type UsageData = v.InferOutput<typeof UsageDataSchema>;
+const glob = async (_patterns: string[], options: { cwd: string; absolute: boolean }): Promise<string[]> => {
+	const files: string[] = [];
 
-export const DailyUsageSchema = v.object({
-	date: v.string(),
-	inputTokens: v.number(),
-	outputTokens: v.number(),
-	cacheCreationTokens: v.number(),
-	cacheReadTokens: v.number(),
-	totalCost: v.number(),
-});
+	async function walkDir(dir: string) {
+		try {
+			for await (const entry of Deno.readDir(dir)) {
+				const path = join(dir, entry.name);
 
-export type DailyUsage = v.InferOutput<typeof DailyUsageSchema>;
+				if (entry.isFile && entry.name.endsWith(".jsonl")) {
+					files.push(options.absolute ? path : relative(options.cwd, path));
+				} else if (entry.isDirectory) {
+					await walkDir(path);
+				}
+			}
+		} catch (error) {
+			// Skip directories we can't read
+			if (!(error instanceof Deno.errors.PermissionDenied)) {
+				throw error;
+			}
+		}
+	}
 
-export const SessionUsageSchema = v.object({
-	sessionId: v.string(),
-	projectPath: v.string(),
-	inputTokens: v.number(),
-	outputTokens: v.number(),
-	cacheCreationTokens: v.number(),
-	cacheReadTokens: v.number(),
-	totalCost: v.number(),
-	lastActivity: v.string(),
-});
+	await walkDir(options.cwd);
+	return files;
+};
 
-export type SessionUsage = v.InferOutput<typeof SessionUsageSchema>;
+export const getDefaultClaudePath = () => join(homedir(), ".claude");
+
+// Validation types
+interface UsageMessage {
+	usage: {
+		input_tokens: number;
+		output_tokens: number;
+		cache_creation_input_tokens?: number;
+		cache_read_input_tokens?: number;
+	};
+}
+
+export interface UsageData {
+	timestamp: string;
+	message: UsageMessage;
+	costUSD: number;
+}
+
+const validateUsageData = (data: unknown): UsageData | null => {
+	if (!data || typeof data !== "object") return null;
+	// deno-lint-ignore no-explicit-any
+	const obj = data as any;
+	if (
+		typeof obj.timestamp !== "string" ||
+		typeof obj.costUSD !== "number" ||
+		!obj.message?.usage ||
+		typeof obj.message.usage.input_tokens !== "number" ||
+		typeof obj.message.usage.output_tokens !== "number"
+	) {
+		return null;
+	}
+	return obj as UsageData;
+};
+
+export interface DailyUsage {
+	date: string;
+	inputTokens: number;
+	outputTokens: number;
+	cacheCreationTokens: number;
+	cacheReadTokens: number;
+	totalCost: number;
+}
+
+export interface SessionUsage {
+	sessionId: string;
+	projectPath: string;
+	inputTokens: number;
+	outputTokens: number;
+	cacheCreationTokens: number;
+	cacheReadTokens: number;
+	totalCost: number;
+	lastActivity: string;
+}
 
 export const formatDate = (dateStr: string): string => {
 	const date = new Date(dateStr);
@@ -67,7 +109,7 @@ export async function loadUsageData(
 	options?: LoadOptions,
 ): Promise<DailyUsage[]> {
 	const claudePath = options?.claudePath ?? getDefaultClaudePath();
-	const claudeDir = path.join(claudePath, "projects");
+	const claudeDir = join(claudePath, "projects");
 	const files = await glob(["**/*.jsonl"], {
 		cwd: claudeDir,
 		absolute: true,
@@ -80,7 +122,7 @@ export async function loadUsageData(
 	const dailyMap = new Map<string, DailyUsage>();
 
 	for (const file of files) {
-		const content = await readFile(file, "utf-8");
+		const content = await readFile(file);
 		const lines = content
 			.trim()
 			.split("\n")
@@ -89,11 +131,10 @@ export async function loadUsageData(
 		for (const line of lines) {
 			try {
 				const parsed = JSON.parse(line);
-				const result = v.safeParse(UsageDataSchema, parsed);
-				if (!result.success) {
+				const data = validateUsageData(parsed);
+				if (!data) {
 					continue;
 				}
-				const data = result.output;
 
 				const date = formatDate(data.timestamp);
 				const existing = dailyMap.get(date) || {
@@ -107,14 +148,12 @@ export async function loadUsageData(
 
 				existing.inputTokens += data.message.usage.input_tokens || 0;
 				existing.outputTokens += data.message.usage.output_tokens || 0;
-				existing.cacheCreationTokens +=
-					data.message.usage.cache_creation_input_tokens || 0;
-				existing.cacheReadTokens +=
-					data.message.usage.cache_read_input_tokens || 0;
+				existing.cacheCreationTokens += data.message.usage.cache_creation_input_tokens || 0;
+				existing.cacheReadTokens += data.message.usage.cache_read_input_tokens || 0;
 				existing.totalCost += data.costUSD || 0;
 
 				dailyMap.set(date, existing);
-			} catch (e) {
+			} catch (_e) {
 				// Skip invalid JSON lines
 			}
 		}
@@ -140,7 +179,7 @@ export async function loadSessionData(
 	options?: LoadOptions,
 ): Promise<SessionUsage[]> {
 	const claudePath = options?.claudePath ?? getDefaultClaudePath();
-	const claudeDir = path.join(claudePath, "projects");
+	const claudeDir = join(claudePath, "projects");
 	const files = await glob(["**/*.jsonl"], {
 		cwd: claudeDir,
 		absolute: true,
@@ -154,15 +193,15 @@ export async function loadSessionData(
 
 	for (const file of files) {
 		// Extract session info from file path
-		const relativePath = path.relative(claudeDir, file);
-		const parts = relativePath.split(path.sep);
+		const relativePath = relative(claudeDir, file);
+		const parts = relativePath.split(sep);
 
 		// Session ID is the directory name containing the JSONL file
 		const sessionId = parts[parts.length - 2];
 		// Project path is everything before the session ID
-		const projectPath = parts.slice(0, -2).join(path.sep);
+		const projectPath = parts.slice(0, -2).join(sep);
 
-		const content = await readFile(file, "utf-8");
+		const content = await readFile(file);
 		const lines = content
 			.trim()
 			.split("\n")
@@ -172,11 +211,10 @@ export async function loadSessionData(
 		for (const line of lines) {
 			try {
 				const parsed = JSON.parse(line);
-				const result = v.safeParse(UsageDataSchema, parsed);
-				if (!result.success) {
+				const data = validateUsageData(parsed);
+				if (!data) {
 					continue;
 				}
-				const data = result.output;
 
 				const key = `${projectPath}/${sessionId}`;
 				const existing = sessionMap.get(key) || {
@@ -192,10 +230,8 @@ export async function loadSessionData(
 
 				existing.inputTokens += data.message.usage.input_tokens || 0;
 				existing.outputTokens += data.message.usage.output_tokens || 0;
-				existing.cacheCreationTokens +=
-					data.message.usage.cache_creation_input_tokens || 0;
-				existing.cacheReadTokens +=
-					data.message.usage.cache_read_input_tokens || 0;
+				existing.cacheCreationTokens += data.message.usage.cache_creation_input_tokens || 0;
+				existing.cacheReadTokens += data.message.usage.cache_read_input_tokens || 0;
 				existing.totalCost += data.costUSD || 0;
 
 				// Keep track of the latest timestamp
@@ -205,7 +241,7 @@ export async function loadSessionData(
 				}
 
 				sessionMap.set(key, existing);
-			} catch (e) {
+			} catch (_e) {
 				// Skip invalid JSON lines
 			}
 		}

@@ -1,10 +1,13 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run --allow-read --allow-env
 
-import process from "node:process";
 import { cli } from "gunshi";
 import { dailyCommand } from "./commands/daily.ts";
 import { sessionCommand } from "./commands/session.ts";
-import { description, name, version } from "./package.json";
+
+// Package info
+const name = "ccusage";
+const version = "0.3.2";
+const description = "Usage analysis tool for Claude Code";
 
 // Create subcommands map
 const subCommands = new Map();
@@ -13,7 +16,7 @@ subCommands.set("session", sessionCommand);
 
 const mainCommand = dailyCommand;
 
-await cli(process.argv.slice(2), mainCommand, {
+await cli(Deno.args, mainCommand, {
 	name,
 	version,
 	description,

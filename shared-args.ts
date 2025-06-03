@@ -1,14 +1,13 @@
 import type { Args } from "gunshi";
-import * as v from "valibot";
-import { getDefaultClaudePath } from "./data-loader";
-import { dateSchema } from "./types";
+import { getDefaultClaudePath } from "./data-loader.ts";
+
+const dateRegex = /^\d{8}$/;
 
 const parseDateArg = (value: string): string => {
-	const result = v.safeParse(dateSchema, value);
-	if (!result.success) {
-		throw new TypeError(result.issues[0].message);
+	if (!dateRegex.test(value)) {
+		throw new TypeError("Date must be in YYYYMMDD format");
 	}
-	return result.output;
+	return value;
 };
 
 export const sharedArgs = {

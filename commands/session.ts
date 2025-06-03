@@ -1,12 +1,7 @@
-import process from "node:process";
 import Table from "cli-table3";
 import { define } from "gunshi";
 import pc from "picocolors";
-import {
-	calculateTotals,
-	createTotalsObject,
-	getTotalTokens,
-} from "../calculate-cost.ts";
+import { calculateTotals, createTotalsObject, getTotalTokens } from "../calculate-cost.ts";
 import { type LoadOptions, loadSessionData } from "../data-loader.ts";
 import { log, logger } from "../logger.ts";
 import { sharedArgs } from "../shared-args.ts";
@@ -30,7 +25,7 @@ export const sessionCommand = define({
 			} else {
 				logger.warn("No Claude usage data found.");
 			}
-			process.exit(0);
+			Deno.exit(0);
 		}
 
 		// Calculate totals
@@ -55,7 +50,7 @@ export const sessionCommand = define({
 			log(JSON.stringify(jsonOutput, null, 2));
 		} else {
 			// Print header
-			logger.box("Claude Code Token Usage Report - By Session");
+			log("\n" + pc.cyan("Claude Code Token Usage Report - By Session") + "\n");
 
 			// Create table
 			const table = new Table({
@@ -89,10 +84,7 @@ export const sessionCommand = define({
 			let maxProjectLength = 0;
 			let maxSessionLength = 0;
 			for (const data of sessionData) {
-				const projectDisplay =
-					data.projectPath.length > 20
-						? `...${data.projectPath.slice(-17)}`
-						: data.projectPath;
+				const projectDisplay = data.projectPath.length > 20 ? `...${data.projectPath.slice(-17)}` : data.projectPath;
 				const sessionDisplay = data.sessionId.split("-").slice(-2).join("-"); // Display last two parts of session ID
 
 				maxProjectLength = Math.max(maxProjectLength, projectDisplay.length);
