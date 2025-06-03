@@ -1,3 +1,9 @@
+# This repository is archived.
+
+The reason.
+https://github.com/ryoppippi/ccusage/commit/8ce4b35a78480056a819acf48f6c0aab4913f832
+and there is no longer a need to maintain a fork.
+
 # ccusage
 
 > **ccusage(claude-code-usage)**
