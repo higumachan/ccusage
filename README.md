@@ -84,6 +84,23 @@ bun install -g ccusage
 ccusage daily
 ```
 
+### Remote Execution with Deno
+
+You can run ccusage directly from GitHub without installation using Deno:
+
+```bash
+# Run the default daily report
+deno run --allow-read --allow-env https://raw.githubusercontent.com/higumachan/ccusage/main/mod.ts
+
+# Run with subcommands and options
+deno run --allow-read --allow-env https://raw.githubusercontent.com/higumachan/ccusage/main/mod.ts daily --json
+deno run --allow-read --allow-env https://raw.githubusercontent.com/higumachan/ccusage/main/mod.ts session
+deno run --allow-read --allow-env https://raw.githubusercontent.com/higumachan/ccusage/main/mod.ts daily --since 20240101
+
+# Create an alias for convenience
+alias ccusage-remote="deno run --allow-read --allow-env https://raw.githubusercontent.com/higumachan/ccusage/main/mod.ts"
+```
+
 ### Development Setup
 
 ```bash
